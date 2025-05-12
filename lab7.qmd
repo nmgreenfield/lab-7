@@ -1,0 +1,84 @@
+---
+title: "Lab 7"
+editor: source
+---
+
+```{r}
+#| include: false
+
+library(tidyverse)
+library(rlang)
+library(purrr)
+library(httr)
+library(jsonlite)
+```
+
+```{r}
+#| label: read and merge data
+
+latlong <- read.table("data/latlong.txt", quote="\"", comment.char="")
+names(latlong) <- c("abrv", "lat", "long")
+
+city_names <- read.table("data/names.txt", quote="\"", comment.char="")
+names(city_names) <- c("abrv", "city")
+
+cities <- merge(city_names, latlong) %>%
+  select(city, lat, long)
+```
+
+```{r}
+#| label: API function
+
+get_city_info <- function(lat, long) {
+  url <- paste0("https://api.g7vrd.co.uk/v1/satellite-passes/25544/",
+                lat, "/", long, ".json?hours=72")
+  
+  res <- try(GET(url), silent = TRUE)
+  content <- content(res, "text", encoding = "UTF-8")
+  json_data <- fromJSON(content, flatten = TRUE)
+  return(json_data)
+}
+```
+
+```{r}
+#| label: API pull
+
+city_info <- cities %>%
+  mutate(info = pmap(list(lat, long), get_city_info))
+```
+
+
+```{r}
+#| label: clean data
+
+city_info <- city_info %>%
+  mutate(passes = map(info, "passes"))
+
+city_info_new <- city_info %>%
+  mutate(passes = map(passes, function(x) {
+    if (is.data.frame(x)) return(list(x)) # put data frame in list
+    else if (is.list(x)) return(x) # already a list
+  }))
+
+final_df <- city_info_new %>%
+  select(city, lat, long, passes) %>%
+  unnest(passes, keep_empty = TRUE)
+
+
+final_df <- final_df %>% # get first 3 passes for each city
+  mutate(passes = map(passes, ~ {
+    if (is.data.frame(.x) && nrow(.x) > 0) {
+      slice(.x, 1:3) %>% select(start)
+    } else {
+      tibble(start = NA)
+    }
+  }))
+
+flattened_df <- final_df %>% # one row per pass
+  unnest(passes)
+```
+
+
+
+
+
