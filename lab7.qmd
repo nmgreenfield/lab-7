@@ -11,6 +11,7 @@ library(rlang)
 library(purrr)
 library(httr)
 library(jsonlite)
+library(leaflet)
 ```
 
 ```{r}
@@ -18,9 +19,13 @@ library(jsonlite)
 
 latlong <- read.table("data/latlong.txt", quote="\"", comment.char="")
 names(latlong) <- c("abrv", "lat", "long")
+latlong <- latlong %>%
+  filter(abrv != "US")
 
 city_names <- read.table("data/names.txt", quote="\"", comment.char="")
 names(city_names) <- c("abrv", "city")
+city_names <- city_names %>%
+  filter(abrv != "US")
 
 cities <- merge(city_names, latlong) %>%
   select(city, lat, long)
@@ -75,10 +80,64 @@ final_df <- final_df %>% # get first 3 passes for each city
   }))
 
 flattened_df <- final_df %>% # one row per pass
-  unnest(passes)
+  unnest(passes) %>%
+  mutate(start = as.POSIXct(start, format = "%Y-%m-%dT%H:%M:%OSZ", tz = "UTC")) %>%
+  rename(time = start)
+
 ```
 
 
+```{r}
+#| label: plot info
+
+#popup info
+popup_data <- flattened_df %>%
+  group_by(city, lat, long) %>%
+  summarise(
+    soonest = if (all(is.na(time))) "No upcoming passes" 
+              else format(min(time, na.rm = TRUE), "%B %d, %Y %I:%M %p UTC"),
+    
+    all_passes = if (all(is.na(time))) "No upcoming passes"
+                 else paste(format(time, "%B %d, %Y %I:%M %p UTC"), collapse = "<br>"),
+    
+    .groups = "drop"
+  )
+
+#line info
+ordered_cities <- flattened_df %>%
+  filter(!is.na(time)) %>%
+  group_by(city, lat, long) %>%
+  summarise(soonest_time = min(time), .groups = "drop") %>%
+  arrange(soonest_time)
+```
+
+```{r}
+#| label: plot
+
+leaflet(popup_data) %>%
+  addTiles() %>%
+  addMarkers(
+    lng = ~long,
+    lat = ~lat,
+    label = ~paste0(city, ": ", soonest),  # Hover info
+    popup = ~paste0(
+      "<strong>", city, "</strong><br>",
+      "Upcoming ISS Passes:<br>",
+      all_passes
+    ),
+    icon = makeIcon(
+      iconUrl = "logo/rocket.svg",
+      iconWidth = 15, iconHeight = 15)
+  ) %>%
+  addPolylines(
+    lng = ordered_cities$long,
+    lat = ordered_cities$lat,
+    color = "blue",
+    weight = 2,
+    opacity = 0.8,
+    label = "ISS Pass Order"
+  )
+```
 
 
 
