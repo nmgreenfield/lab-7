@@ -133,7 +133,7 @@ leaflet(popup_data) %>%
     lng = ordered_cities$long,
     lat = ordered_cities$lat,
     color = "blue",
-    weight = 2,
+    weight = 1,
     opacity = 0.8,
     label = "ISS Pass Order"
   )
