@@ -36,7 +36,7 @@ cities <- merge(city_names, latlong) %>%
 
 get_city_info <- function(lat, long) {
   url <- paste0("https://api.g7vrd.co.uk/v1/satellite-passes/25544/",
-                lat, "/", long, ".json?hours=72")
+                lat, "/", long, ".json?hours=72") # pulls by lat long
   
   res <- try(GET(url), silent = TRUE)
   content <- content(res, "text", encoding = "UTF-8")
@@ -62,7 +62,7 @@ city_info <- city_info %>%
 city_info_new <- city_info %>%
   mutate(passes = map(passes, function(x) {
     if (is.data.frame(x)) return(list(x)) # put data frame in list
-    else if (is.list(x)) return(x) # already a list
+    else if (is.list(x)) return(x) # return if already a list
   }))
 
 final_df <- city_info_new %>%
